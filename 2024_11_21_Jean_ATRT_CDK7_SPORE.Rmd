@@ -1,0 +1,1983 @@
+---
+title: "2024_11_21_Jean_ATRT_CDK7_SPORE"
+output: html_document
+date: "2024_11_21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import Library
+==============
+
+```{r}
+folder.name = "2024_11_21_Jean_ATRT_CDK7_SPORE"
+
+script.date = "2024_11_21"
+
+if(!exists(folder.name)){
+  dir.create(folder.name)
+}
+
+library(DiffBind)
+library(GenomicRanges)
+library(tidyverse)
+library(readxl)
+library(valr)
+library(rtracklayer)
+library(plyranges)
+library(Rsamtools)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
+library(ChIPseeker)
+library(BRGenomics)
+library(here)
+library(UpSetR)
+library(gplots)
+library(profileplyr)
+library(gridExtra)
+```
+
+Theme Definition
+================
+
+```{r}
+# Use colorblind-friendly colors
+friendly_cols <- dittoSeq::dittoColors()
+
+# Set theme
+custom_theme <-
+  list(
+    scale_fill_manual(values = friendly_cols),
+    scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(linewidth = 0.2),
+        panel.grid.minor = element_line(linewidth = 0.1),
+        text = element_text(size = 9),
+        legend.position = "bottom",
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1)
+      )
+  )
+
+```
+
+# Read Consensus Peaks
+
+```{r}
+# peak_counts <- read.table("./nf_results/nf_Group1_BT12ac/03_peak_calling/05_consensus_peaks/BT12_H3K27ac_NT.macs2.consensus.peak_counts.bed", header = FALSE, sep = "\t")
+# 
+# apeak_counts <- read.table("./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_NT_R1.macs2_peaks.broadPeak", header = FALSE, sep = "\t")
+```
+
+# 1. dba() DE Analysis
+
+## Task 1.1 Import meta-data table
+
+```{r}
+Data.dictionary = read.csv("./metadata_all_samples_nf_res.csv")
+# Data.dictionary = read.csv("./metadata_all_samples_own_pipeline.csv")
+
+Data.dictionary
+```
+
+## Task 1.2 Define subset
+
+```{r}
+# Remove the following samples from analysis
+# Group 1- replicate 3 (both NT and THZ2)
+# Group 2- replicate 1 (both NT and THZ2)
+# Group 3- replicate 3 (both NT and THZ2)
+# Group 4- replicate 3 (both NT and THZ2)
+
+
+ori.BT12_H3K27ac_NT = c(
+  "BT12_H3K27ac_NT_rep1",
+  "BT12_H3K27ac_NT_rep2"
+  # "BT12_H3K27ac_NT_rep3"
+)
+ori.BT12_H3K27ac_THZ2 = c(
+  "BT12_H3K27ac_THZ2_rep1",
+  "BT12_H3K27ac_THZ2_rep2"
+  # "BT12_H3K27ac_THZ2_rep3"
+  # "BT12_H3K27ac_pos_control_rep1",
+  # "BT12_H3K27ac_pos_control_rep2",
+  # "BT12_H3K27ac_pos_control_rep3"
+)
+
+
+ori.BT12_H3K27me3_NT = c(
+  # "BT12_H3K27me3_NT_rep1",
+  "BT12_H3K27me3_NT_rep2",
+  "BT12_H3K27me3_NT_rep3"
+)
+ori.BT12_H3K27me3_THZ2 = c(
+  # "BT12_H3K27me3_THZ2_rep1",
+  "BT12_H3K27me3_THZ2_rep2",
+  "BT12_H3K27me3_THZ2_rep3"
+  # "BT12_H3K27me3_pos_control_rep1",
+  # "BT12_H3K27me3_pos_control_rep2",
+  # "BT12_H3K27me3_pos_control_rep3"
+)
+
+
+ori.BT16_H3K27ac_NT = c(
+  "BT16_H3K27ac_NT_rep1",
+  "BT16_H3K27ac_NT_rep2"
+  # "BT16_H3K27ac_NT_rep3"
+)
+ori.BT16_H3K27ac_THZ2 = c(
+  "BT16_H3K27ac_THZ2_rep1",
+  "BT16_H3K27ac_THZ2_rep2"
+  # "BT16_H3K27ac_THZ2_rep3"
+  # "BT16_H3K27ac_pos_control_rep1",
+  # "BT16_H3K27ac_pos_control_rep2",
+  # "BT16_H3K27ac_pos_control_rep3"
+)
+
+
+ori.BT16_H3K27me3_NT = c(
+  "BT16_H3K27me3_NT_rep1",
+  "BT16_H3K27me3_NT_rep2"
+  # "BT16_H3K27me3_NT_rep3"
+)
+ori.BT16_H3K27me3_THZ2 = c(
+  "BT16_H3K27me3_THZ2_rep1",
+  "BT16_H3K27me3_THZ2_rep2"
+  # "BT16_H3K27me3_THZ2_rep3"
+  # "BT16_H3K27me3_pos_control_rep1",
+  # "BT16_H3K27me3_pos_control_rep2",
+  # "BT16_H3K27me3_pos_control_rep3"
+)
+```
+
+### Task 1.2.1 BT12_H3K27ac(NT_vs_THZ2)
+
+```{r}
+# subset.samples = c(
+#   ori.BT12_H3K27ac_NT,
+#   ori.BT12_H3K27ac_THZ2
+# )
+# contrast.main = "Treatment"
+# contrast.numerator = "DMSO"
+# contrast.denominator = "THZ2"
+# # numerator vs. denominator
+# contrast.output.filename = paste0("BT12_H3K27ac(NT_vs_THZ2)")
+```
+
+### Task 1.2.2 BT12_H3K27me3(NT_vs_THZ)
+
+```{r}
+# subset.samples = c(
+#   ori.BT12_H3K27me3_NT,
+#   ori.BT12_H3K27me3_THZ2
+# )
+# contrast.main = "Treatment"
+# contrast.numerator = "DMSO"
+# contrast.denominator = "THZ2"
+# # numerator vs. denominator
+# contrast.output.filename = paste0("BT12_H3K27me3(NT_vs_THZ2)")
+```
+
+### Task 1.2.3 BT16_H3K27ac(NT_vs_THZ2)
+
+```{r}
+# subset.samples = c(
+#   ori.BT16_H3K27ac_NT,
+#   ori.BT16_H3K27ac_THZ2
+# )
+# contrast.main = "Treatment"
+# contrast.numerator = "DMSO"
+# contrast.denominator = "THZ2"
+# # numerator vs. denominator
+# contrast.output.filename = paste0("BT16_H3K27ac(NT_vs_THZ2)")
+```
+
+### Task 1.2.4 BT16_H3K27me3(NT_vs_THZ)
+
+```{r}
+subset.samples = c(
+  ori.BT16_H3K27me3_NT,
+  ori.BT16_H3K27me3_THZ2
+)
+contrast.main = "Treatment"
+contrast.numerator = "DMSO"
+contrast.denominator = "THZ2"
+# numerator vs. denominator
+contrast.output.filename = paste0("BT16_H3K27me3(NT_vs_THZ2)")
+```
+
+## Task 1.3 Data.dictionary.final
+
+```{r}
+Data.dictionary %>% 
+  dplyr::filter(SampleID %in% subset.samples) %>% 
+  arrange(match(subset.samples, SampleID)) -> Data.dictionary.final
+Data.dictionary.final
+```
+
+## Task 1.4 Create DiffBind Object
+
+```{r}
+dbaObj <- dba(sampleSheet = Data.dictionary.final)
+dbaObj
+```
+
+## Task 1.5 Count Reads
+
+```{r}
+dbaObj <- dba.count(dbaObj)
+dbaObj
+```
+
+```{r}
+info <- dba.show(dbaObj)
+libsizes <- cbind(LibReads=info$Reads, FRiP=info$FRiP, PeakReads=round(info$Reads * info$FRiP))
+rownames(libsizes) <- info$ID
+libsizes
+```
+
+```{r}
+dba.show(dbaObj)
+```
+
+# Save Point
+
+```{r}
+save_point = paste0(folder.name, "/SAVE_POINT")
+
+if(!exists(save_point)){
+  dir.create(save_point)
+}
+```
+
+```{r}
+saveRDS(dbaObj, file = paste0(save_point, "/", contrast.output.filename, ".rds"))
+```
+
+```{r}
+# # Load the object back
+# dbaObj <- readRDS(file = paste0(save_point, "/BT12_H3K27ac(NT_vs_THZ2).rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT12_H3K27me3(NT_vs_THZ2).rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT16_H3K27ac(NT_vs_THZ2).rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT16_H3K27me3(NT_vs_THZ2).rds"))
+```
+
+## Task 1.6 PCA Plot
+
+```{r}
+pca_path = paste0(folder.name, "/PCA_plot")
+
+if(!exists(pca_path)){
+  dir.create(pca_path)
+}
+```
+
+```{r}
+file_path <- paste0(pca_path, "/", contrast.output.filename, ".pdf")
+
+# pca_results <- dba.plotPCA(dbaObj, attributes=DBA_TREATMENT)
+
+pca_results <- dba.plotPCA(dbaObj,
+                           attributes=DBA_TREATMENT,
+                           label = DBA_ID,
+                           labelSize = 0.5,
+                           angle=45,
+                           hjust = 0.5)
+
+pdf(file_path, width = 10, height = 8)
+print(pca_results)
+dev.off()
+```
+
+## Task 1.7 Norm Data
+
+```{r}
+dbaObj <- dba.normalize(dbaObj)
+```
+
+```{r}
+norm <- dba.normalize(dbaObj, bRetrieve=TRUE)
+norm
+```
+
+## Task 1.8 Model Design
+
+```{r}
+dbaObj
+```
+
+```{r}
+## Full version:
+# dbaObj = dba.contrast(dbaObj, contrast = c(contrast.main, contrast.numerator, contrast.denominator), reorderMeta = list(Treatment=contrast.denominator))
+dbaObj = dba.contrast(dbaObj, contrast = c(contrast.main, contrast.numerator, contrast.denominator))
+
+dbaObj
+```
+
+## Task 1.9 DE Analysis
+
+```{r}
+## This will run the default DESeq2 analysis
+dbaObj <- dba.analyze(dbaObj)
+```
+
+```{r}
+dba.show(dbaObj, bContrasts=TRUE)
+```
+
+```{r}
+dbaObj$contrasts
+
+min(dbaObj$contrasts[[1]][["DESeq2"]][["de"]][["pval"]])
+max(dbaObj$contrasts[[1]][["DESeq2"]][["de"]][["pval"]])
+
+min(dbaObj$contrasts[[1]][["DESeq2"]][["de"]][["padj"]])
+max(dbaObj$contrasts[[1]][["DESeq2"]][["de"]][["padj"]])
+
+## Group 1: BT12_H3K27ac(NT_vs_THZ2)
+# [1] 0.001046197
+# [1] 0.9978059
+# [1] 0.4471667
+# [1] 0.9978059
+
+## Group 2: BT12_H3K27me3(NT_vs_THZ2)
+# [1] 0.01576683
+# [1] 0.9999983
+# [1] 0.9999983
+# [1] 0.9999983
+
+## Group 3: BT16_H3K27ac(NT_vs_THZ2)
+# [1] 0.02450101
+# [1] 0.9999992
+# [1] 0.9999992
+# [1] 0.9999992
+
+## Group 4: BT16_H3K27me3(NT_vs_THZ)
+# [1] 0.003282619
+# [1] 1
+# [1] 0.9739064
+# [1] 1
+```
+
+```{r}
+heatmap_path = paste0(folder.name, "/Heatmap")
+
+if(!exists(heatmap_path)){
+  dir.create(heatmap_path)
+}
+```
+
+```{r}
+# plot(dbaObj, contrast=1)
+plot(dbaObj)
+
+# Plot and save
+pdf(paste0(heatmap_path, "/heatmap_", contrast.output.filename, ".pdf"), width=15, height=10)
+plot(dbaObj, main=contrast.output.filename, cexRow=0.8, cexCol=0.8, las=2)
+dev.off()
+```
+
+# Save Point
+
+```{r}
+saveRDS(dbaObj, file = paste0(save_point, "/", contrast.output.filename, "_DEresults.rds"))
+```
+
+```{r}
+# # Load the object back
+# dbaObj <- readRDS(file = paste0(save_point, "/BT12_H3K27ac(NT_vs_THZ2)_DEresults.rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT12_H3K27me3(NT_vs_THZ2)_DEresults.rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT16_H3K27ac(NT_vs_THZ2)_DEresults.rds"))
+# dbaObj <- readRDS(file = paste0(save_point, "/BT16_H3K27me3(NT_vs_THZ2)_DEresults.rds"))
+```
+
+## Task 1.10 Retrieve DE bound sites
+
+```{r}
+DE_results = paste0(folder.name, "/DE_results")
+
+if(!exists(DE_results)){
+  dir.create(DE_results)
+}
+```
+
+```{r}
+# dbaObj.DB = dba.report(dbaObj, th=0.05, bUsePval=TRUE, bCounts=TRUE)
+dbaObj.DB = dba.report(dbaObj, th=1, bUsePval=TRUE, bCounts=TRUE)
+
+dbaObj.DB.df <- as.data.frame(dbaObj.DB)
+# Sort by FDR value (ascending = most significant first)
+dbaObj.DB.df.sorted <- dbaObj.DB.df[order(dbaObj.DB.df$FDR), ]
+# Keep the top 25%
+top_25_df <- dbaObj.DB.df.sorted[1:floor(0.25 * nrow(dbaObj.DB.df.sorted)), ]
+
+# min(dbaObj.DB@elementMetadata@listData[["p-value"]])
+# max(dbaObj.DB@elementMetadata@listData[["p-value"]])
+# 
+# min(dbaObj.DB@elementMetadata@listData[["FDR"]])
+# max(dbaObj.DB@elementMetadata@listData[["FDR"]])
+
+dbaObj.DB
+top_25_df
+```
+
+```{r}
+start_position <- dbaObj.DB@ranges@start
+end_position <- dbaObj.DB@ranges@start + dbaObj.DB@ranges@width - 1
+
+# dbaObj.DB is dba.report output
+peakGRanges <- GRanges(seqnames = Rle(dbaObj.DB@seqnames),
+                       ranges = IRanges(start = start_position, end = end_position),
+                       strand = strand(rep("*", length(start_position))))
+
+# Annotate peaks
+annoPeaks <- annotatePeak(peakGRanges, tssRegion = c(-3000, 3000),
+                          TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene)
+
+# Convert annotation to a data frame
+annoPeaks.df <- as.data.frame(annoPeaks)
+
+# Merge with original DBA results
+dbaObj.DB.Annotated <- merge(dbaObj.DB, annoPeaks.df, by.x = c("seqnames", "start", "end"), by.y = c("seqnames", "start", "end"))
+
+dbaObj.DB.Annotated %>% 
+  mutate(gene_symbol = mapIds(org.Hs.eg.db, keys = geneId, keytype = "ENTREZID", column = "SYMBOL", multiVals = "first")) %>% 
+  # mutate(gene_entrez = mapIds(org.Hs.eg.db, keys = geneId, keytype = "ENTREZID", column = "ENTREZID", multiVals = "first")) %>% 
+  mutate(gene_desc = mapIds(org.Hs.eg.db, keys = geneId, keytype = "ENTREZID", column = "GENENAME", multiVals = "first")) %>% 
+  relocate(gene_symbol, gene_desc, .after = geneId) -> dbaObj.DB.Annotated.res
+
+write.csv(dbaObj.DB.Annotated.res, paste0(DE_results, "/", contrast.output.filename, "_noFilter.csv"), row.names = FALSE)
+# write.csv(dbaObj.DB.Annotated.res, paste0(DE_results, "/", contrast.output.filename, "_pValue0.05.csv"), row.names = FALSE)
+```
+
+```{r}
+start_position <- top_25_df$start
+end_position <- top_25_df$end
+
+peakGRanges <- GRanges(seqnames = Rle(top_25_df$seqnames),
+                       ranges = IRanges(start = start_position, end = end_position),
+                       strand = strand(rep("*", length(start_position))))
+
+annoPeaks <- annotatePeak(peakGRanges, 
+                          tssRegion = c(-3000, 3000),
+                          TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene)
+
+annoPeaks.df <- as.data.frame(annoPeaks)
+
+top_25_df.Annotated <- merge(top_25_df, annoPeaks.df, 
+                             by.x = c("seqnames", "start", "end"), 
+                             by.y = c("seqnames", "start", "end"))
+
+top_25_df.Annotated.res <- top_25_df.Annotated %>%
+  mutate(gene_symbol = mapIds(org.Hs.eg.db, 
+                              keys = geneId, 
+                              keytype = "ENTREZID", 
+                              column = "SYMBOL", 
+                              multiVals = "first")) %>%
+  mutate(gene_desc = mapIds(org.Hs.eg.db, 
+                            keys = geneId, 
+                            keytype = "ENTREZID", 
+                            column = "GENENAME", 
+                            multiVals = "first")) %>%
+  relocate(gene_symbol, gene_desc, .after = geneId)
+
+write.csv(top_25_df.Annotated.res, 
+          # paste0(DE_results, "/", contrast.output.filename, "_pValue0.05_Top25pct_FDR.csv"),
+          paste0(DE_results, "/", contrast.output.filename, "_noFilter_Top25pct_FDR.csv"),
+          row.names = FALSE)
+```
+
+# 2. Genome Coverage Plot
+
+```{r}
+library(rtracklayer)
+library(ggcoverage) # Mainly this package
+library(ggpattern)
+library(ggbio)
+library(GenomicRanges)
+
+```
+
+```{r}
+ggcoverage_path = paste0(folder.name, "/Genome_Coverage_plot")
+
+if(!exists(ggcoverage_path)){
+  dir.create(ggcoverage_path)
+}
+```
+
+## Task 2.1 Group 1
+
+```{r}
+# load metadata
+# SampleName in sample_meta matches the real filename (without .bw)
+
+sample_meta <- data.frame(
+  SampleName = c(
+    "BT12_H3K27ac_NT_R1",
+    "BT12_H3K27ac_NT_R2",
+    "BT12_H3K27ac_NT_R3",
+    "BT12_H3K27ac_THZ2_R1",
+    "BT12_H3K27ac_THZ2_R2",
+    "BT12_H3K27ac_THZ2_R3"
+  ),
+  Type = c("12ac_NT_1", "12ac_NT_2", "12ac_NT_3", 
+           "12ac_THZ2_1", "12ac_THZ2_2", "12ac_THZ2_3"),
+  Group = c("DMSO", "DMSO", "DMSO", "THZ2", "THZ2", "THZ2")
+)
+
+sample_meta
+```
+
+```{r}
+# Define the directory
+track_folder <- "./nf_results/nf_Group1_BT12ac/04_reporting/bw_files/"
+
+# load bigwig file
+track_df <- LoadTrackFile(
+  track.folder = track_folder,
+  format = "bw",
+  # region = "chr5:69232795-69279430", # CDK7
+  # region = "chr17:7482366-7516616", # POLR2A
+  region = "chr22:23784966-23840009", # SMARCB1
+  meta.info = sample_meta
+)
+
+head(track_df)
+```
+
+```{r}
+# Define the genomic region of Genes
+mark_region <- data.frame(
+  # start = c(69232795),
+  # end = c(69279430), # CDK7
+  # start = c(7482366),
+  # end = c(7516616), # POLR2A
+  start = c(23784966),
+  end = c(23840009), # SMARCB1
+  # label = c("CDK7 Gene")
+  # label = c("POLR2A Gene")
+  label = c("SMARCB1 Gene")
+)
+
+basic_coverage <- ggcoverage(
+  data = track_df,
+  mark.region = mark_region,
+  show.mark.label = FALSE,
+  facet.y.scale = c("fixed")
+)
+
+basic_coverage
+```
+
+```{r}
+# get consensus peak file
+peak_file <- "./nf_results/nf_Group1_BT12ac/03_peak_calling/05_consensus_peaks/BT12_H3K27ac_NT.macs2.consensus.peaks.awk.bed"
+
+# Define the path to your GTF file
+gtf_file <- "/Users/ltian/Desktop/Project_CU/genomic_ref/Homo_sapiens.GRCh38.113.gtf"
+
+# Import GTF as GenomicRanges
+gtf_gr <- import(gtf_file, format = "gtf")
+
+# # Filter: remove weird chromosomes, NA ranges, and zero/negative widths
+# gtf_gr <- gtf_gr[
+#   !is.na(seqnames(gtf_gr)) &
+#   !is.na(start(gtf_gr)) &
+#   !is.na(end(gtf_gr)) &
+#   width(gtf_gr) > 0 &
+#   seqnames(gtf_gr) %in% paste0("chr", c(1:22, "X", "Y"))
+# ]
+
+# Add 'chr' prefix if needed
+if (!all(grepl("^chr", seqlevels(gtf_gr)))) {
+  seqlevels(gtf_gr) <- paste0("chr", seqlevels(gtf_gr))
+}
+
+gtf_genes <- gtf_gr[gtf_gr$type == "gene"]
+
+# # Define standard human chromosomes (you can adjust as needed)
+# standard_chroms <- paste0("chr", c(1:22, "X", "Y"))
+# 
+# # Filter to standard chromosomes only
+# gtf_gr <- keepSeqlevels(gtf_gr, standard_chroms, pruning.mode = "coarse")
+# 
+# # Remove entries with NA in seqnames/start/end
+# gtf_gr <- gtf_gr[!is.na(seqnames(gtf_gr)) & !is.na(start(gtf_gr)) & !is.na(end(gtf_gr))]
+# 
+# # Also check for widths that are 0 or negative (can cause weird errors)
+# gtf_gr <- gtf_gr[width(gtf_gr) > 0]
+
+# pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_CDK7.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_POLR2A.pdf"), width = 10, height = 10)
+pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_SMARCB1.pdf"), width = 10, height = 10)
+
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+dev.off()
+```
+
+```{r}
+# Define peak files for both conditions
+peak_file_DMSO <- "./nf_results/nf_Group1_BT12ac/03_peak_calling/05_consensus_peaks/BT12_H3K27ac_NT.macs2.consensus.peaks.awk.bed"
+
+peak_file_THZ2 <- "./nf_results/nf_Group1_BT12ac/03_peak_calling/05_consensus_peaks/BT12_H3K27ac_THZ2.macs2.consensus.peaks.awk.bed"
+
+# seqlevels(gtf_gr)
+
+# Plot coverage with both peak files
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file_DMSO) +
+  geom_peak(bed.file = peak_file_THZ2) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+# Load peak files
+peaks_DMSO <- read.table(peak_file_DMSO, header = FALSE, sep = "\t")
+peaks_THZ2 <- read.table(peak_file_THZ2, header = FALSE, sep = "\t")
+
+# Count peaks in each condition
+num_peaks_DMSO <- nrow(peaks_DMSO)
+num_peaks_THZ2 <- nrow(peaks_THZ2)
+
+# Print counts
+cat("DMSO peaks:", num_peaks_DMSO, "\n")
+cat("THZ2 peaks:", num_peaks_THZ2, "\n")
+# Higher peaks in THZ2 → Indicates increased enhancer activity.
+# Lower peaks in THZ2 → Suggests loss of H3K27ac binding.
+
+# pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_CDK7_2.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_POLR2A_2.pdf"), width = 10, height = 10)
+pdf(paste0(ggcoverage_path, "/Group1_BT12_H3K27ac_SMARCB1_2.pdf"), width = 10, height = 10)
+
+print(
+  basic_coverage  +
+    theme(strip.text = element_text(size = 4)) +
+    geom_gene(gtf.gr = gtf_gr) +
+    geom_peak(bed.file = peak_file_DMSO) +
+    geom_peak(bed.file = peak_file_THZ2) +
+    geom_ideogram(genome = "hg38", plot.space = 0)
+)
+
+dev.off()
+```
+
+```{r}
+# Explain this plot and heatmap
+# Why peaks only has one black bar, why difference of THZ2 (diff using these two)
+# Should I include neg and pos
+# FRiP
+# Make labels bigger
+
+# For all other groups
+```
+
+```{r}
+# FRiP = (Reads in Peaks) / (Total Reads)
+# A high FRiP score (>10%) indicates good ChIP enrichment.
+# ❌ Bad data → FRiP < 1% (suggests weak enrichment or background noise).
+
+library(GenomicRanges)
+
+# Convert ChIP-seq coverage data (track_df) into GRanges
+track_gr <- makeGRangesFromDataFrame(track_df, seqnames.field = "seqnames", 
+                                     start.field = "start", end.field = "end")
+
+# Convert peak data into GRanges
+peaks <- makeGRangesFromDataFrame(read.table(peak_file, header = FALSE, sep = "\t")[,1:3], 
+                                  seqnames.field = "V1", start.field = "V2", end.field = "V3")
+
+# Compute reads overlapping peaks
+reads_in_peaks <- sum(countOverlaps(peaks, track_gr))
+print(reads_in_peaks)
+
+total_reads <- sum(track_df$score)
+
+# Compute FRiP
+FRiP <- reads_in_peaks / total_reads
+print(FRiP)
+```
+
+## Task 2.2 Group 2
+
+```{r}
+# load metadata
+# SampleName in sample_meta matches the real filename (without .bw)
+
+sample_meta <- data.frame(
+  SampleName = c(
+    "BT12_H3K27me3_NT_R1",
+    "BT12_H3K27me3_NT_R2",
+    "BT12_H3K27me3_NT_R3",
+    "BT12_H3K27me3_THZ2_R1",
+    "BT12_H3K27me3_THZ2_R2",
+    "BT12_H3K27me3_THZ2_R3"
+  ),
+  Type = c("12me3_NT_1", "12me3_NT_2", "12me3_NT_3", 
+           "12me3_THZ2_1", "12me3_THZ2_2", "12me3_THZ2_3"),
+  Group = c("DMSO", "DMSO", "DMSO", "THZ2", "THZ2", "THZ2")
+)
+
+sample_meta
+```
+
+```{r}
+# Define the directory
+# track_folder <- "./nf_results/nf_Group2_BT12me3/04_reporting/bw_files/"
+track_folder <- "./nf_results/nf_Group2_BT12me3/04_reporting/bw_files_own/"
+
+# load bigwig file
+track_df <- LoadTrackFile(
+  track.folder = track_folder,
+  format = "bw",
+  region = "chr5:69232795-69279430", # CDK7
+  # region = "chr17:7482366-7516616", # POLR2A
+  # region = "chr22:23784966-23840009", # SMARCB1
+  meta.info = sample_meta
+)
+
+head(track_df)
+```
+
+```{r}
+# Define the genomic region of Genes
+mark_region <- data.frame(
+  start = c(69232795),
+  end = c(69279430), # CDK7
+  # start = c(7482366),
+  # end = c(7516616), # POLR2A
+  # start = c(23784966),
+  # end = c(23840009), # SMARCB1
+  label = c("CDK7 Gene")
+  # label = c("POLR2A Gene")
+  # label = c("SMARCB1 Gene")
+)
+
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_CDK7.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_POLR2A.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_SMARCB1.pdf"), width = 10, height = 10)
+
+basic_coverage <- ggcoverage(
+  data = track_df,
+  mark.region = mark_region,
+  show.mark.label = FALSE,
+  facet.y.scale = c("fixed")
+)
+# basic_coverage
+
+# dev.off()
+
+basic_coverage
+```
+
+```{r}
+# get consensus peak file
+peak_file <- "./nf_results/nf_Group2_BT12me3/03_peak_calling/05_consensus_peaks/BT12_H3K27me3_NT.macs2.consensus.peaks.awk.bed"
+# peak_file <- "./nf_results/nf_Group2_BT12me3/03_peak_calling/05_consensus_peaks/BT12_H3K27me3_THZ2.macs2.consensus.peaks.awk.bed"
+
+# # Define the path to your GTF file
+# gtf_file <- "/Users/ltian/Desktop/Project_CU/genomic_ref/Homo_sapiens.GRCh38.113.gtf"
+# 
+# # Import GTF as a GenomicRanges object
+# gtf_gr <- import(gtf_file, format = "gtf")
+# 
+# # Only add 'chr' if not already present
+# if (!all(grepl("^chr", seqlevels(gtf_gr)))) {
+#   seqlevels(gtf_gr) <- paste0("chr", seqlevels(gtf_gr))
+# }
+
+pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_CDK7.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_POLR2A.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_SMARCB1.pdf"), width = 10, height = 10)
+
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+dev.off()
+```
+
+```{r}
+# Define peak files for both conditions
+peak_file_DMSO <- "./nf_results/nf_Group2_BT12me3/03_peak_calling/05_consensus_peaks/BT12_H3K27me3_NT.macs2.consensus.peaks.awk.bed"
+
+peak_file_THZ2 <- "./nf_results/nf_Group2_BT12me3/03_peak_calling/05_consensus_peaks/BT12_H3K27me3_THZ2.macs2.consensus.peaks.awk.bed"
+
+# Plot coverage with both peak files
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file_DMSO) +
+  geom_peak(bed.file = peak_file_THZ2) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+# Load peak files
+peaks_DMSO <- read.table(peak_file_DMSO, header = FALSE, sep = "\t")
+peaks_THZ2 <- read.table(peak_file_THZ2, header = FALSE, sep = "\t")
+
+# Count peaks in each condition
+num_peaks_DMSO <- nrow(peaks_DMSO)
+num_peaks_THZ2 <- nrow(peaks_THZ2)
+
+# Print counts
+cat("DMSO peaks:", num_peaks_DMSO, "\n")
+cat("THZ2 peaks:", num_peaks_THZ2, "\n")
+# Higher peaks in THZ2 → Indicates increased enhancer activity.
+# Lower peaks in THZ2 → Suggests loss of H3K27ac binding.
+
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_CDK7_2.pdf"), width = 10, height = 10)
+pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_POLR2A_2.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group2_BT12_H3K27me3_SMARCB1_2.pdf"), width = 10, height = 10)
+
+print(
+  basic_coverage  +
+    theme(strip.text = element_text(size = 4)) +
+    geom_gene(gtf.gr = gtf_gr) +
+    geom_peak(bed.file = peak_file_DMSO) +
+    geom_peak(bed.file = peak_file_THZ2) +
+    geom_ideogram(genome = "hg38", plot.space = 0)
+)
+
+dev.off()
+```
+
+## Task 2.3 Group 3
+
+```{r}
+# load metadata
+# SampleName in sample_meta matches the real filename (without .bw)
+
+sample_meta <- data.frame(
+  SampleName = c(
+    "BT16_H3K27ac_NT_R1",
+    "BT16_H3K27ac_NT_R2",
+    "BT16_H3K27ac_NT_R3",
+    "BT16_H3K27ac_THZ2_R1",
+    "BT16_H3K27ac_THZ2_R2",
+    "BT16_H3K27ac_THZ2_R3"
+  ),
+  Type = c("16ac_NT_1", "16ac_NT_2", "16ac_NT_3", 
+           "16ac_THZ2_1", "16ac_THZ2_2", "16ac_THZ2_3"),
+  Group = c("DMSO", "DMSO", "DMSO", "THZ2", "THZ2", "THZ2")
+)
+
+sample_meta
+```
+
+```{r}
+# Define the directory
+track_folder <- "./nf_results/nf_Group3_BT16ac/04_reporting/bw_files/"
+
+# load bigwig file
+track_df <- LoadTrackFile(
+  track.folder = track_folder,
+  format = "bw",
+  # region = "chr5:69232795-69279430", # CDK7
+  # region = "chr17:7482366-7516616", # POLR2A
+  region = "chr22:23784966-23840009", # SMARCB1
+  meta.info = sample_meta
+)
+
+head(track_df)
+```
+
+```{r}
+# Define the genomic region of Genes
+mark_region <- data.frame(
+  # start = c(69232795),
+  # end = c(69279430), # CDK7
+  # start = c(7482366),
+  # end = c(7516616), # POLR2A
+  start = c(23784966),
+  end = c(23840009), # SMARCB1
+  # label = c("CDK7 Gene")
+  # label = c("POLR2A Gene")
+  label = c("SMARCB1 Gene")
+)
+
+basic_coverage <- ggcoverage(
+  data = track_df,
+  mark.region = mark_region,
+  show.mark.label = FALSE,
+  facet.y.scale = c("fixed")
+)
+
+basic_coverage
+```
+
+```{r}
+# get consensus peak file
+peak_file <- "./nf_results/nf_Group3_BT16ac/03_peak_calling/05_consensus_peaks/BT16_H3K27ac_NT.macs2.consensus.peaks.awk.bed"
+
+# # Define the path to your GTF file
+# gtf_file <- "/Users/ltian/Desktop/Project_CU/genomic_ref/Homo_sapiens.GRCh38.113.gtf"
+# 
+# # Import GTF as GenomicRanges
+# gtf_gr <- import(gtf_file, format = "gtf")
+# 
+# # Add 'chr' prefix if needed
+# if (!all(grepl("^chr", seqlevels(gtf_gr)))) {
+#   seqlevels(gtf_gr) <- paste0("chr", seqlevels(gtf_gr))
+# }
+
+# pdf(paste0(ggcoverage_path, "/Group3_BT16_H3K27ac_CDK7.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group3_BT16_H3K27ac_POLR2A.pdf"), width = 10, height = 10)
+pdf(paste0(ggcoverage_path, "/Group3_BT16_H3K27ac_SMARCB1.pdf"), width = 10, height = 10)
+
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+dev.off()
+```
+
+## Task 2.4 Group 4
+
+```{r}
+# load metadata
+# SampleName in sample_meta matches the real filename (without .bw)
+
+sample_meta <- data.frame(
+  SampleName = c(
+    "BT16_H3K27me3_NT_R1",
+    "BT16_H3K27me3_NT_R2",
+    "BT16_H3K27me3_NT_R3",
+    "BT16_H3K27me3_THZ2_R1",
+    "BT16_H3K27me3_THZ2_R2",
+    "BT16_H3K27me3_THZ2_R3"
+  ),
+  Type = c("16me3_NT_1", "16me3_NT_2", "16me3_NT_3", 
+           "16me3_THZ2_1", "16me3_THZ2_2", "16me3_THZ2_3"),
+  Group = c("DMSO", "DMSO", "DMSO", "THZ2", "THZ2", "THZ2")
+)
+
+sample_meta
+```
+
+```{r}
+# Define the directory
+track_folder <- "./nf_results/nf_Group4_BT16me3/04_reporting/bw_files_own/"
+
+# load bigwig file
+track_df <- LoadTrackFile(
+  track.folder = track_folder,
+  format = "bw",
+  region = "chr5:69232795-69279430", # CDK7
+  # region = "chr17:7482366-7516616", # POLR2A
+  # region = "chr22:23784966-23840009", # SMARCB1
+  meta.info = sample_meta
+)
+
+head(track_df)
+```
+
+```{r}
+# Define the genomic region of Genes
+mark_region <- data.frame(
+  start = c(69232795),
+  end = c(69279430), # CDK7
+  # start = c(7482366),
+  # end = c(7516616), # POLR2A
+  # start = c(23784966),
+  # end = c(23840009), # SMARCB1
+  label = c("CDK7 Gene")
+  # label = c("POLR2A Gene")
+  # label = c("SMARCB1 Gene")
+)
+
+basic_coverage <- ggcoverage(
+  data = track_df,
+  mark.region = mark_region,
+  show.mark.label = FALSE,
+  facet.y.scale = c("fixed")
+)
+
+basic_coverage
+```
+
+```{r}
+# get consensus peak file
+peak_file <- "./nf_results/nf_Group4_BT16me3/03_peak_calling/05_consensus_peaks/BT16_H3K27me3_NT.macs2.consensus.peaks.awk.bed"
+
+# # Define the path to your GTF file
+# gtf_file <- "/Users/ltian/Desktop/Project_CU/genomic_ref/Homo_sapiens.GRCh38.113.gtf"
+# 
+# # Import GTF as GenomicRanges
+# gtf_gr <- import(gtf_file, format = "gtf")
+# 
+# # Add 'chr' prefix if needed
+# if (!all(grepl("^chr", seqlevels(gtf_gr)))) {
+#   seqlevels(gtf_gr) <- paste0("chr", seqlevels(gtf_gr))
+# }
+
+pdf(paste0(ggcoverage_path, "/Group4_BT16_H3K27me3_CDK7.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group4_BT16_H3K27ac_POLR2A.pdf"), width = 10, height = 10)
+# pdf(paste0(ggcoverage_path, "/Group4_BT16_H3K27ac_SMARCB1.pdf"), width = 10, height = 10)
+
+basic_coverage +
+  geom_gene(gtf.gr = gtf_gr) +
+  geom_peak(bed.file = peak_file) +
+  geom_ideogram(genome = "hg38", plot.space = 0)
+
+dev.off()
+```
+
+# 3. Heatmap for each gene region
+
+```{r}
+library(rtracklayer)
+library(GenomicRanges)
+library(profileplyr)
+library(SummarizedExperiment)
+```
+
+```{r}
+profileplyr_path = paste0(folder.name, "/Heatmap_for_each_gene")
+
+if(!exists(profileplyr_path)){
+  dir.create(profileplyr_path)
+}
+```
+
+## Task 3.1 Group 1
+
+```{r}
+signalFiles <- c(
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_NT_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_NT_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_NT_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_THZ2_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_THZ2_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_THZ2_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_pos_control_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_pos_control_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_pos_control_R3.target.dedup.sorted.bam"
+)
+
+# # BAMs must be indexed
+# require(Rsamtools)
+# for (i in seq_along(signalFiles)){
+#   indexBam(signalFiles[i])
+# }
+```
+
+```{r}
+# **Maybe only one bed file is enough
+
+bed_files <- c(
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_NT_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_NT_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_NT_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_THZ2_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_THZ2_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_THZ2_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_pos_control_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_pos_control_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_pos_control_R3.macs2.peaks.cut.bed"  
+)
+
+# Function to read and restrict to standard chromosomes
+read_and_filter <- function(path) {
+  gr <- import(path, format = "BED")
+  # Keep only canonical chromosomes (e.g., chr1–chr22, chrX, chrY)
+  gr <- keepStandardChromosomes(gr, pruning.mode = "coarse")
+  return(gr)
+}
+
+# Apply to all BEDs
+all_peaks_list <- lapply(bed_files, read_and_filter)
+
+# Combine without warning
+all_peaks_bed <- do.call(c, all_peaks_list)
+
+all_peaks_unique <- unique(all_peaks_bed)
+
+all_peaks_unique
+```
+
+```{r}
+# Define output folder
+output_dir <- "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/filtered_genes"
+
+# Create directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Define gene regions as GRanges
+regions <- GRanges(seqnames = c("chr22", "chr5", "chr17"),
+                   ranges = IRanges(start = c(23784966, 69232795, 7482366),
+                                    end   = c(23840009, 69279430, 7516616)),
+                   gene = c("SMARCB1", "CDK7", "POLR2A"))
+
+# Filter and export each gene's peaks
+for (i in seq_along(regions)) {
+  gene_name <- mcols(regions)$gene[i]
+  region <- regions[i]
+  
+  overlaps <- subsetByOverlaps(all_peaks_unique, region)
+  
+  # Build file path
+  out_file <- file.path(output_dir, paste0(gene_name, "_peaks.bed"))
+  
+  # Export
+  export(overlaps, con = out_file, format = "BED")
+}
+```
+
+```{r}
+testRanges <- c(
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/filtered_genes/CDK7_peaks.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/filtered_genes/POLR2A_peaks.bed",
+  "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/filtered_genes/SMARCB1_peaks.bed"
+)
+
+# CDK7_consensus <- "./nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/filtered_genes/SMARCB1_peaks.bed"
+# CDK7_data <- fread(CDK7_consensus, header = FALSE)
+```
+
+```{r}
+chipProfile_1 <- BamBigwig_to_chipProfile(signalFiles, 
+                         testRanges, 
+                         format = "bam",
+                         paired=TRUE,
+                         style="percentOfRegion",
+                         nOfWindows=20,
+                         distanceAround=40
+                         )
+chipProfile_1
+```
+
+```{r}
+proplyrObject <- as_profileplyr(chipProfile_1)
+# params(proplyrObject)$rowGroupsInUse
+# unique(rowData(proplyrObject)$sgGroup)
+
+# # Rename sgGroup values
+# rowData(proplyrObject)$sgGroup <- factor(rowData(proplyrObject)$sgGroup,
+#   levels = paste0("sgGroup", 1:6),
+#   labels = c("NT_R1", "NT_R2", "NT_R3", "THZ2_R1", "THZ2_R2", "THZ2_R3")
+# )
+```
+
+```{r}
+proplyrObject
+```
+
+```{r}
+# assays(proplyrObject)
+# dim(proplyrObject)
+
+# rowRanges(proplyrObject)[1:3]
+# sampleData(proplyrObject)
+# params(proplyrObject)$rowGroupsInUse
+# params(proplyrObject)$mcolToOrderBy
+proplyrObject <- orderBy(proplyrObject, "score")
+# params(proplyrObject)$mcolToOrderBy
+```
+
+```{r}
+# proplyrObject[1:10,1:10]
+# proplyrObject[ , , 1:2]
+# rownames(sampleData(proplyrObject))
+rownames(sampleData(proplyrObject)) <- c("12_ac_NT1",
+                                         "12_ac_NT2",
+                                         "12_ac_NT3",
+                                         "12_ac_THZ2_1",
+                                         "12_ac_THZ2_2",
+                                         "12_ac_THZ2_3",
+                                         "12_ac_pos_1",
+                                         "12_ac_pos_2",
+                                         "12_ac_pos_3"
+                                         )
+```
+
+```{r}
+regions <- rowRanges(proplyrObject)
+
+subset_idx <- which(
+  (seqnames(regions) == "chr22" & start(regions) >= 23784966 & end(regions) <= 23840009) |
+  (seqnames(regions) == "chr5"  & start(regions) >= 69232795 & end(regions) <= 69279430) |
+  (seqnames(regions) == "chr17" & start(regions) >= 7482366  & end(regions) <= 7516616)
+)
+
+subset_proplyr <- proplyrObject[subset_idx, ]
+subset_proplyr
+```
+
+```{r}
+# output_path <- file.path(tempdir(),"ATAC_example.MAT.gz")
+# export_deepToolsMat(proplyrObject, con = output_path)
+
+# heatmap <- generateEnrichedHeatmap(proplyrObject)
+
+# heatmap <- generateEnrichedHeatmap(subset_proplyr)
+
+# pdf_file <- file.path(profileplyr_path, "/Group1_proplyr_heatmap.pdf")
+pdf_file <- file.path(profileplyr_path, "/Group1_proplyr_heatmap_pos.pdf")
+# pdf(pdf_file, width = 12, height = 10)
+pdf(pdf_file, width = 14, height = 10)
+heatmap <- generateEnrichedHeatmap(subset_proplyr)
+# print(heatmap)
+dev.off()
+
+
+
+# EH_mat <- convertToEnrichedHeatmapMat(proplyrObject)
+# EH_mat[[1]]
+# 
+# object_sumMat <- summarize(proplyrObject, 
+#                            fun = rowMeans, 
+#                            output = "matrix") 
+# object_sumMat[1:3, ]
+# 
+# proplyrObject_long <- summarize(proplyrObject, 
+#                                 fun = rowMeans, 
+#                                 output = "long") 
+# proplyrObject_long[1:3, ]
+```
+
+## Task 3.2 Group 2
+
+```{r}
+# Truncated files (4): NT_R1, THZ2_R1, pos_R2, pos_R3
+
+signalFiles <- c(
+  # "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_NT_R1.target.dedup.sorted.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group2_BT12_H3K27me3/2311_BT12_NT_S35_L008.bam",
+  "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_NT_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_NT_R3.target.dedup.sorted.bam",
+  # "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_THZ2_R1.repaired.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group2_BT12_H3K27me3/2311_BT12_THZ2_S36_L008.bam",
+  "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_THZ2_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_THZ2_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group2_BT12me3/02_alignment/dedup/BT12_H3K27me3_pos_control_R1.target.dedup.sorted.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group2_BT12_H3K27me3/231103_BT12_pos_S9_L008.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group2_BT12_H3K27me3/231108_BT12_pos_S17_L008.bam"
+)
+
+# # BAMs must be indexed
+# require(Rsamtools)
+# for (i in seq_along(signalFiles)){
+#   indexBam(signalFiles[i])
+# }
+```
+
+```{r}
+bed_files <- c(
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_NT_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_NT_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_NT_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_THZ2_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_THZ2_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_THZ2_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_pos_control_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_pos_control_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/BT12_H3K27me3_pos_control_R3.macs2.peaks.cut.bed"
+)
+
+# Function to read and restrict to standard chromosomes
+read_and_filter <- function(path) {
+  gr <- import(path, format = "BED")
+  # Keep only canonical chromosomes (e.g., chr1–chr22, chrX, chrY)
+  gr <- keepStandardChromosomes(gr, pruning.mode = "coarse")
+  return(gr)
+}
+
+# Apply to all BEDs
+all_peaks_list <- lapply(bed_files, read_and_filter)
+
+# Combine without warning
+all_peaks_bed <- do.call(c, all_peaks_list)
+
+all_peaks_unique <- unique(all_peaks_bed)
+
+all_peaks_unique
+```
+
+```{r}
+# Define output folder
+output_dir <- "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/filtered_genes"
+
+# Create directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Define gene regions as GRanges
+regions <- GRanges(seqnames = c("chr22", "chr5", "chr17"),
+                   ranges = IRanges(start = c(23784966, 69232795, 7482366),
+                                    end   = c(23840009, 69279430, 7516616)),
+                   gene = c("SMARCB1", "CDK7", "POLR2A"))
+
+# Filter and export each gene's peaks
+for (i in seq_along(regions)) {
+  gene_name <- mcols(regions)$gene[i]
+  region <- regions[i]
+  
+  overlaps <- subsetByOverlaps(all_peaks_unique, region)
+  
+  # Build file path
+  out_file <- file.path(output_dir, paste0(gene_name, "_peaks.bed"))
+  
+  # Export
+  export(overlaps, con = out_file, format = "BED")
+}
+```
+
+```{r}
+testRanges <- c(
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/filtered_genes/CDK7_peaks.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/filtered_genes/POLR2A_peaks.bed",
+  "./nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/filtered_genes/SMARCB1_peaks.bed"
+)
+```
+
+```{r}
+chipProfile_2 <- BamBigwig_to_chipProfile(signalFiles, 
+                         testRanges, 
+                         format = "bam",
+                         paired=TRUE,
+                         style="percentOfRegion",
+                         nOfWindows=20,
+                         distanceAround=40
+                         )
+chipProfile_2
+```
+
+```{r}
+proplyrObject <- as_profileplyr(chipProfile_2)
+```
+
+```{r}
+proplyrObject
+```
+
+```{r}
+proplyrObject <- orderBy(proplyrObject, "score")
+```
+
+```{r}
+rownames(sampleData(proplyrObject)) <- c("12_me3_NT1",
+                                         "12_me3_NT2",
+                                         "12_me3_NT3",
+                                         "12_me3_THZ2_1",
+                                         "12_me3_THZ2_2",
+                                         "12_me3_THZ2_3",
+                                         "12_me3_pos_1",
+                                         "12_me3_pos_2",
+                                         "12_me3_pos_3")
+```
+
+```{r}
+regions <- rowRanges(proplyrObject)
+
+subset_idx <- which(
+  (seqnames(regions) == "chr22" & start(regions) >= 23784966 & end(regions) <= 23840009) |
+  (seqnames(regions) == "chr5"  & start(regions) >= 69232795 & end(regions) <= 69279430) |
+  (seqnames(regions) == "chr17" & start(regions) >= 7482366  & end(regions) <= 7516616)
+)
+
+subset_proplyr <- proplyrObject[subset_idx, ]
+subset_proplyr
+```
+
+```{r}
+# pdf_file <- file.path(profileplyr_path, "Group2_proplyr_heatmap.pdf")
+# pdf(pdf_file, width = 12, height = 10)
+pdf_file <- file.path(profileplyr_path, "Group2_proplyr_heatmap_pos.pdf")
+pdf(pdf_file, width = 14, height = 10)
+heatmap <- generateEnrichedHeatmap(subset_proplyr)
+# print(heatmap)
+dev.off()
+```
+
+
+## Task 3.3 Group 3
+
+```{r}
+signalFiles <- c(
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_NT_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_NT_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_NT_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_THZ2_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_THZ2_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_THZ2_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_pos_control_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_pos_control_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group3_BT16ac/02_alignment/dedup/BT16_H3K27ac_pos_control_R3.target.dedup.sorted.bam"
+)
+
+# # BAMs must be indexed
+# require(Rsamtools)
+# for (i in seq_along(signalFiles)){
+#   indexBam(signalFiles[i])
+# }
+```
+
+```{r}
+bed_files <- c(
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_NT_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_NT_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_NT_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_THZ2_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_THZ2_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_THZ2_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_pos_control_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_pos_control_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/macs2/BT16_H3K27ac_pos_control_R3.macs2.peaks.cut.bed"
+)
+
+# Function to read and restrict to standard chromosomes
+read_and_filter <- function(path) {
+  gr <- import(path, format = "BED")
+  # Keep only canonical chromosomes (e.g., chr1–chr22, chrX, chrY)
+  gr <- keepStandardChromosomes(gr, pruning.mode = "coarse")
+  return(gr)
+}
+
+# Apply to all BEDs
+all_peaks_list <- lapply(bed_files, read_and_filter)
+
+# Combine without warning
+all_peaks_bed <- do.call(c, all_peaks_list)
+
+all_peaks_unique <- unique(all_peaks_bed)
+
+all_peaks_unique
+```
+
+```{r}
+# Define output folder
+output_dir <- "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/filtered_genes"
+
+# Create directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Define gene regions as GRanges
+regions <- GRanges(seqnames = c("chr22", "chr5", "chr17"),
+                   ranges = IRanges(start = c(23784966, 69232795, 7482366),
+                                    end   = c(23840009, 69279430, 7516616)),
+                   gene = c("SMARCB1", "CDK7", "POLR2A"))
+
+# Filter and export each gene's peaks
+for (i in seq_along(regions)) {
+  gene_name <- mcols(regions)$gene[i]
+  region <- regions[i]
+  
+  overlaps <- subsetByOverlaps(all_peaks_unique, region)
+  
+  # Build file path
+  out_file <- file.path(output_dir, paste0(gene_name, "_peaks.bed"))
+  
+  # Export
+  export(overlaps, con = out_file, format = "BED")
+}
+```
+
+```{r}
+testRanges <- c(
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/filtered_genes/CDK7_peaks.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/filtered_genes/POLR2A_peaks.bed",
+  "./nf_results/nf_Group3_BT16ac/03_peak_calling/04_called_peaks/filtered_genes/SMARCB1_peaks.bed"
+)
+```
+
+```{r}
+chipProfile_3 <- BamBigwig_to_chipProfile(signalFiles, 
+                         testRanges, 
+                         format = "bam",
+                         paired=TRUE,
+                         style="percentOfRegion",
+                         nOfWindows=20,
+                         distanceAround=40
+                         )
+chipProfile_3
+```
+
+```{r}
+proplyrObject <- as_profileplyr(chipProfile_3)
+```
+
+```{r}
+proplyrObject
+```
+
+```{r}
+proplyrObject <- orderBy(proplyrObject, "score")
+```
+
+```{r}
+rownames(sampleData(proplyrObject)) <- c("16_ac_NT1",
+                                         "16_ac_NT2",
+                                         "16_ac_NT3",
+                                         "16_ac_THZ2_1",
+                                         "16_ac_THZ2_2",
+                                         "16_ac_THZ2_3",
+                                         "16_ac_pos_1",
+                                         "16_ac_pos_2",
+                                         "16_ac_pos_3")
+```
+
+```{r}
+regions <- rowRanges(proplyrObject)
+
+subset_idx <- which(
+  (seqnames(regions) == "chr22" & start(regions) >= 23784966 & end(regions) <= 23840009) |
+  (seqnames(regions) == "chr5"  & start(regions) >= 69232795 & end(regions) <= 69279430) |
+  (seqnames(regions) == "chr17" & start(regions) >= 7482366  & end(regions) <= 7516616)
+)
+
+subset_proplyr <- proplyrObject[subset_idx, ]
+subset_proplyr
+```
+
+```{r}
+# pdf_file <- file.path(profileplyr_path, "Group3_proplyr_heatmap.pdf")
+# pdf(pdf_file, width = 12, height = 10)
+pdf_file <- file.path(profileplyr_path, "Group3_proplyr_heatmap_pos.pdf")
+pdf(pdf_file, width = 14, height = 10)
+heatmap <- generateEnrichedHeatmap(subset_proplyr)
+# print(heatmap)
+dev.off()
+```
+
+## Task 3.4 Group 4
+
+```{r}
+# Truncated files (3): NT_R1, THZ2_R1, THZ2_R3
+
+signalFiles <- c(
+  # "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_NT_R1.target.dedup.sorted.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group4_BT16_H3K27me3/231023_BT16_NT_S30_L004.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_NT_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_NT_R3.target.dedup.sorted.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_THZ2_R1.target.dedup.sorted.bam",
+  # "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_THZ2_R2.target.dedup.sorted.bam",
+  # "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_THZ2_R3.target.dedup.sorted.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group4_BT16_H3K27me3/231205_BT16_THZ2_S20_L003.bam",
+  "./nf_results/Own_pipeline/sorted_nodup_bam_files_wo_extraction/Group4_BT16_H3K27me3/240412_BT16_THZ2_S2_L007.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_pos_control_R1.target.dedup.sorted.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_pos_control_R2.target.dedup.sorted.bam",
+  "./nf_results/nf_Group4_BT16me3/02_alignment/dedup/BT16_H3K27me3_pos_control_R3.target.dedup.sorted.bam"
+)
+
+# # BAMs must be indexed
+# require(Rsamtools)
+# for (i in seq_along(signalFiles)){
+#   indexBam(signalFiles[i])
+# }
+```
+
+```{r}
+bed_files <- c(
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_NT_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_NT_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_NT_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_THZ2_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_THZ2_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_THZ2_R3.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_pos_control_R1.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_pos_control_R2.macs2.peaks.cut.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/macs2/BT16_H3K27me3_pos_control_R3.macs2.peaks.cut.bed"
+)
+
+# Function to read and restrict to standard chromosomes
+read_and_filter <- function(path) {
+  gr <- import(path, format = "BED")
+  # Keep only canonical chromosomes (e.g., chr1–chr22, chrX, chrY)
+  gr <- keepStandardChromosomes(gr, pruning.mode = "coarse")
+  return(gr)
+}
+
+# Apply to all BEDs
+all_peaks_list <- lapply(bed_files, read_and_filter)
+
+# Combine without warning
+all_peaks_bed <- do.call(c, all_peaks_list)
+
+all_peaks_unique <- unique(all_peaks_bed)
+
+all_peaks_unique
+```
+
+```{r}
+# Define output folder
+output_dir <- "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/filtered_genes"
+
+# Create directory if it doesn't exist
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Define gene regions as GRanges
+regions <- GRanges(seqnames = c("chr22", "chr5", "chr17"),
+                   ranges = IRanges(start = c(23784966, 69232795, 7482366),
+                                    end   = c(23840009, 69279430, 7516616)),
+                   gene = c("SMARCB1", "CDK7", "POLR2A"))
+
+# Filter and export each gene's peaks
+for (i in seq_along(regions)) {
+  gene_name <- mcols(regions)$gene[i]
+  region <- regions[i]
+  
+  overlaps <- subsetByOverlaps(all_peaks_unique, region)
+  
+  # Build file path
+  out_file <- file.path(output_dir, paste0(gene_name, "_peaks.bed"))
+  
+  # Export
+  export(overlaps, con = out_file, format = "BED")
+}
+```
+
+```{r}
+testRanges <- c(
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/filtered_genes/CDK7_peaks.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/filtered_genes/POLR2A_peaks.bed",
+  "./nf_results/nf_Group4_BT16me3/03_peak_calling/04_called_peaks/filtered_genes/SMARCB1_peaks.bed"
+)
+```
+
+```{r}
+chipProfile_4 <- BamBigwig_to_chipProfile(signalFiles, 
+                         testRanges, 
+                         format = "bam",
+                         paired=TRUE,
+                         style="percentOfRegion",
+                         nOfWindows=20,
+                         distanceAround=40
+                         )
+chipProfile_4
+```
+
+```{r}
+proplyrObject <- as_profileplyr(chipProfile_4)
+```
+
+```{r}
+proplyrObject
+```
+
+```{r}
+proplyrObject <- orderBy(proplyrObject, "score")
+```
+
+```{r}
+rownames(sampleData(proplyrObject)) <- c("16_me3_NT1",
+                                         "16_me3_NT2",
+                                         "16_me3_NT3",
+                                         "16_me3_THZ2_1",
+                                         "16_me3_THZ2_2",
+                                         "16_me3_THZ2_3",
+                                         "16_me3_pos_1",
+                                         "16_me3_pos_2",
+                                         "16_me3_pos_3")
+```
+
+```{r}
+regions <- rowRanges(proplyrObject)
+
+subset_idx <- which(
+  (seqnames(regions) == "chr22" & start(regions) >= 23784966 & end(regions) <= 23840009) |
+  (seqnames(regions) == "chr5"  & start(regions) >= 69232795 & end(regions) <= 69279430) |
+  (seqnames(regions) == "chr17" & start(regions) >= 7482366  & end(regions) <= 7516616)
+)
+
+subset_proplyr <- proplyrObject[subset_idx, ]
+subset_proplyr
+```
+
+```{r}
+# pdf_file <- file.path(profileplyr_path, "Group4_proplyr_heatmap.pdf")
+# pdf(pdf_file, width = 12, height = 10)
+pdf_file <- file.path(profileplyr_path, "Group4_proplyr_heatmap_pos.pdf")
+pdf(pdf_file, width = 14, height = 10)
+heatmap <- generateEnrichedHeatmap(subset_proplyr)
+# print(heatmap)
+dev.off()
+```
+
+# End
+
+# MAnorm2
+
+```{r}
+library(MAnorm2)
+```
+
+```{r}
+# Example Input Data:
+head(H3K27Ac)
+```
+
+```{r}
+attr(H3K27Ac, "metaInfo")
+```
+
+```{r}
+library(GenomicRanges)
+library(rtracklayer)
+library(Rsamtools)
+library(GenomicAlignments)
+
+# Step 1: Load Peak Regions
+peak_file <- "/Users/ltian/Desktop/Project_CU/2024_02_07_Jean_ATRT_CDK7/2024_11_10_SPORE_all_samples/nf_results/nf_Group1_BT12ac/03_peak_calling/04_called_peaks/macs2/BT12_H3K27ac_NT_R1.macs2_peaks.broadPeak"
+
+# Load peak regions
+peaks <- read.table(peak_file, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+colnames(peaks) <- c("chrom", "start", "end", "name", "score", "strand", "signal", "pvalue", "qvalue")
+
+# Convert to GenomicRanges object
+peak_gr <- GRanges(seqnames = peaks$chrom, 
+                   ranges = IRanges(start = peaks$start, end = peaks$end))
+
+
+# Step 2: Count Reads in Peaks (BAM File)
+bam_file <- "/Users/ltian/Desktop/Project_CU/2024_02_07_Jean_ATRT_CDK7/2024_11_10_SPORE_all_samples/nf_results/nf_Group1_BT12ac/02_alignment/dedup/BT12_H3K27ac_NT_R1.target.dedup.sorted.bam"
+
+# Create a BamFile object
+bam <- BamFile(bam_file, yieldSize = 1000000)
+
+# Count reads in peaks
+read_counts <- summarizeOverlaps(features = peak_gr, reads = bam, mode = "IntersectionNotEmpty")
+
+# Extract counts
+counts <- assays(read_counts)$counts
+peaks$read_count <- counts
+
+# Step 3: Determine Occupancy Status
+# If peak was called in a region, assign occupancy = 1; otherwise, 0
+peaks$occupancy <- ifelse(peaks$score > 0, 1, 0)
+
+# Step 4: Format Data for MAnorm2
+# Select required columns
+manorm2_input <- peaks[, c("chrom", "start", "end", "read_count", "occupancy")]
+```
+
+
+
+```{r}
+# Define File Paths for All Samples
+samples <- c("BT12_H3K27me3_NT_R1", "BT12_H3K27me3_NT_R2", "BT12_H3K27me3_NT_R3",
+             "BT12_H3K27me3_THZ2_R1", "BT12_H3K27me3_THZ2_R2", "BT12_H3K27me3_THZ2_R3")
+
+peak_dir <- "/Users/ltian/Desktop/Project_CU/2024_02_07_Jean_ATRT_CDK7/2024_11_10_SPORE_all_samples/nf_results/nf_Group2_BT12me3/03_peak_calling/04_called_peaks/macs2/"
+bam_dir  <- "/Users/ltian/Desktop/Project_CU/2024_02_07_Jean_ATRT_CDK7/2024_11_10_SPORE_all_samples/nf_results/nf_Group2_BT12me3/02_alignment/dedup/"
+
+# Step 1: Load Broad Peak Regions (from all samples)
+all_peaks <- list()
+
+for (sample in samples) {
+  peak_file <- file.path(peak_dir, paste0(sample, ".macs2_peaks.broadPeak"))
+  
+  if (file.exists(peak_file)) {
+    peaks <- read.table(peak_file, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+    colnames(peaks) <- c("chrom", "start", "end", "name", "score", "strand", "signal", "pvalue", "qvalue")
+    all_peaks[[sample]] <- peaks[, c("chrom", "start", "end")]
+  } else {
+    message("Missing peak file: ", peak_file)
+  }
+}
+
+# Merge all peak regions from different samples
+merged_peaks <- do.call(rbind, all_peaks)
+merged_peaks <- unique(merged_peaks)
+
+# Convert merged peaks into GenomicRanges object
+peak_gr <- GRanges(seqnames = merged_peaks$chrom, 
+                   ranges = IRanges(start = merged_peaks$start, end = merged_peaks$end))
+
+# Step 2: Count Reads in Peaks for All BAM Files
+read_counts <- data.frame(chrom = as.character(seqnames(peak_gr)),
+                          start = start(peak_gr),
+                          end = end(peak_gr))
+
+for (sample in samples) {
+  bam_file <- file.path(bam_dir, paste0(sample, ".target.dedup.sorted.bam"))
+  
+  if (file.exists(bam_file)) {
+    bam <- BamFile(bam_file, yieldSize = 1000000)
+    counts <- summarizeOverlaps(features = peak_gr, reads = bam, mode = "IntersectionNotEmpty")
+    read_counts[[paste0(sample, ".read_cnt")]] <- assays(counts)$counts
+  } else {
+    message("Missing BAM file: ", bam_file)
+    read_counts[[paste0(sample, ".read_cnt")]] <- NA
+  }
+}
+
+# Step 3: Determine Occupancy Status for All Samples
+for (sample in samples) {
+  peak_file <- file.path(peak_dir, paste0(sample, ".macs2_peaks.broadPeak"))
+  
+  if (file.exists(peak_file)) {
+    peak_data <- read.table(peak_file, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+    colnames(peak_data) <- c("chrom", "start", "end", "name", "score", "strand", "signal", "pvalue", "qvalue")
+    
+    # Convert to GenomicRanges
+    sample_gr <- GRanges(seqnames = peak_data$chrom, 
+                         ranges = IRanges(start = peak_data$start, end = peak_data$end))
+    
+    # Find overlap with merged peaks
+    overlap <- countOverlaps(peak_gr, sample_gr)
+    read_counts[[paste0(sample, ".occupancy")]] <- ifelse(overlap > 0, 1, 0)
+  } else {
+    message("Missing peak file: ", peak_file)
+    read_counts[[paste0(sample, ".occupancy")]] <- NA
+  }
+}
+
+# Step 4: Save MAnorm2 Input Table
+output_file <- "manorm2_input_BT12_H3K27me3.txt"
+write.table(read_counts, file = output_file, sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+```{r}
+library(MAnorm2)
+
+# Load formatted data
+BT12_H3K27me3_data <- as.data.frame(read.table("manorm2_input_BT12_H3K27me3.txt", header = TRUE))
+
+# Normalize within each group
+norm <- MAnorm2::normalize(BT12_H3K27me3_data, count = 4:6, occupancy = 10:12)
+norm <- MAnorm2::normalize(norm, count = 7:9, occupancy = 13:15)
+# Within-group normalization:
+# Normalizes NT samples first → aligns their peak intensities.
+# Normalizes THZ2 samples separately.
+# This step corrects for replicate-level variations.
+
+# Define groups
+conds <- list(
+  NT = bioCond(norm[4:6], norm[10:12], name = "NT"),
+  THZ2 = bioCond(norm[7:9], norm[13:15], name = "THZ2")
+)
+```
+
+```{r}
+# Normalize between groups
+conds <- normBioCond(conds)
+conds
+# Between-group normalization
+# Between-group normalization scales NT and THZ2 using a linear transformation.
+# It uses common peaks to adjust global intensity differences.
+
+
+## slope
+# Represents the scaling factor applied to normalize signal intensities between groups.
+# A slope close to 1 (like 0.9765336 for NT and 1.0000000 for THZ2) means the two datasets already have similar distributions.
+# If the slope was much greater or less than 1, it would indicate a significant shift in signal intensity between the groups.
+
+## intercept
+# The constant offset applied to the normalized values.
+# A small intercept (like -0.04256705 for NT and 0.00000000 for THZ2) suggests that only minor adjustments were needed to align the datasets.
+
+## common.peak.regions
+# The number of peaks shared between NT and THZ2 conditions.
+# 330,597 peaks are common in NT.
+# 384,741 peaks are common in THZ2.
+# A high number of common peaks suggests good overlap between conditions, making normalization more reliable.
+```
+
+```{r}
+# Fit mean-variance curve
+# conds <- MAnorm2::fitMeanVarCurve(conds, method = "parametric", occupy.only = TRUE)
+conds <- fitMeanVarCurve(conds, method = "parametric", occupy.only = TRUE, init.coef = c(0.1, 10))
+
+# Perform differential analysis
+res <- MAnorm2::diffTest(conds$NT, conds$THZ2)
+head(res)
+
+# Average normalized signal intensity in NT
+# Average normalized signal intensity in THZ2
+# Log2 fold change (NT.mean - THZ2.mean) 
+  # eg. -0.628453252	This peak has lower signal in THZ compared to NT; negative - the peak is downregulated in THZ2
+# Standard error of Mval
+# T-statistic for the difference in signal intensity
+  # T < -2 or T > 2 suggests a noticeable difference.
+  # T < -3 or T > 3 is a strong difference.
+# Raw p-value for statistical significance
+# Adjusted p-value (FDR) for multiple testing correction
+```
+
+# Convert Normalized Counts to BedGraph
+
+```{r}
+# Load required library
+library(rtracklayer)
+
+# Load the normalized data
+BT12_H3K27me3_norm <- read.table("manorm2_input_BT12_H3K27me3.txt", header = TRUE)
+
+# List of replicates
+samples_NT <- c("BT12_H3K27me3_NT_R1.read_cnt", "BT12_H3K27me3_NT_R2.read_cnt", "BT12_H3K27me3_NT_R3.read_cnt")
+samples_THZ2 <- c("BT12_H3K27me3_THZ2_R1.read_cnt", "BT12_H3K27me3_THZ2_R2.read_cnt", "BT12_H3K27me3_THZ2_R3.read_cnt")
+
+# Function to create bedGraph files for each replicate
+create_bedgraph <- function(sample_name, output_file) {
+  bedgraph <- BT12_H3K27me3_norm[, c("chrom", "start", "end", sample_name)]
+  colnames(bedgraph)[4] <- "score"  # Rename last column to generic score
+  write.table(bedgraph, file = output_file, sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
+}
+
+# Generate BedGraph files for NT and THZ2 replicates
+for (sample in samples_NT) {
+  output_file <- paste0(sample, ".bedgraph")
+  create_bedgraph(sample, output_file)
+}
+
+for (sample in samples_THZ2) {
+  output_file <- paste0(sample, ".bedgraph")
+  create_bedgraph(sample, output_file)
+}
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+library(rtracklayer)
+
+# Load the normalized data
+BT12_H3K27me3_norm <- read.table("manorm2_input_BT12_H3K27me3.txt", header = TRUE)
+
+# Compute the average normalized signal across replicates for each group
+BT12_H3K27me3_norm$NT_avg <- rowMeans(BT12_H3K27me3_norm[, c("BT12_H3K27me3_NT_R1.read_cnt", 
+                                                 "BT12_H3K27me3_NT_R2.read_cnt", 
+                                                 "BT12_H3K27me3_NT_R3.read_cnt")])
+
+BT12_H3K27me3_norm$THZ2_avg <- rowMeans(BT12_H3K27me3_norm[, c("BT12_H3K27me3_THZ2_R1.read_cnt", 
+                                                   "BT12_H3K27me3_THZ2_R2.read_cnt", 
+                                                   "BT12_H3K27me3_THZ2_R3.read_cnt")])
+
+# Create BedGraph format
+NT_bedgraph <- BT12_H3K27me3_norm[, c("chrom", "start", "end", "NT_avg")]
+THZ2_bedgraph <- BT12_H3K27me3_norm[, c("chrom", "start", "end", "THZ2_avg")]
+
+# Save as BedGraph files
+write.table(NT_bedgraph, file = "BT12_H3K27me3_NT.bedgraph", sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(THZ2_bedgraph, file = "BT12_H3K27me3_THZ2.bedgraph", sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
+```
+
